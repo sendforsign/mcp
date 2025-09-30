@@ -81,12 +81,8 @@ const server = new FastMCP<SessionData>({
       : undefined;
     const clientKey = normalizedHeaderClientKey ?? process.env.SFS_CLIENT_KEY;
 
-    if (!apiKey) {
-      throw new Error('SendForSign API key is required');
-    }
-    if (!clientKey) {
-      throw new Error('SendForSign client key is required');
-    }
+    // Be permissive here so unauthenticated actions like listTools can work.
+    // Tools themselves validate presence of credentials.
     return { apiKey, clientKey };
   },
   health: { enabled: true, message: 'ok', path: '/health', status: 200 },
