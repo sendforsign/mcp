@@ -1,0 +1,50 @@
+{
+  "name": "@iliabovkunov/mcp-sfs",
+  "version": "1.0.0",
+  "description": "MCP server for SendForSign (templates list/read) with stdio and httpStream transports",
+  "type": "module",
+  "bin": {
+    "mcp-sfs": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iliabovkunov/mcp-sfs.git"
+  },
+  "homepage": "https://github.com/iliabovkunov/mcp-sfs#readme",
+  "bugs": {
+    "url": "https://github.com/iliabovkunov/mcp-sfs/issues"
+  },
+  "author": "Ilia Bovkunov",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "sendforsign",
+    "templates",
+    "cli"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "fastmcp": "^3.18.0",
+    "undici": "^6.19.8",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
