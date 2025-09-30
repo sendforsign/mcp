@@ -3,11 +3,9 @@
   "version": "1.0.0",
   "description": "MCP server for SendForSign (templates list/read) with stdio transport",
   "type": "module",
-  "bin": {
-    "sendforsign-mcp": "dist/index.js"
-  },
+  "bin": "dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').chmodSync('dist/index.js','755')\"",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "prepare": "npm run build",
