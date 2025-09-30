@@ -48,7 +48,11 @@ If `clientKey` is omitted in arguments, the value from session/env is used.
 
 ### Transports
 
-- Default `stdio` when `CLOUD_SERVICE` is not `true`
-- `httpStream` when `CLOUD_SERVICE=true` (health at `/health`)
+- Default: `stdio`
+- HTTP streaming: set `CLOUD_SERVICE=true` (health at `/health`)
+
+Notes:
+- `SSE_LOCAL` and `HTTP_STREAMABLE_SERVER` are ignored; only `CLOUD_SERVICE` controls HTTP mode.
+- Keep `CLOUD_SERVICE` unset/false when using stdio‑based MCP clients (e.g., n8n MCP node).
 
 

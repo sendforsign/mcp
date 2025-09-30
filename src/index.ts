@@ -46,9 +46,8 @@ function removeEmptyTopLevel<T extends Record<string, any>>(obj: T): Partial<T> 
 
 class ConsoleLogger implements Logger {
   private shouldLog =
-    process.env.CLOUD_SERVICE === 'true' ||
-    process.env.SSE_LOCAL === 'true' ||
-    process.env.HTTP_STREAMABLE_SERVER === 'true';
+    // Log more verbosely only when explicitly running HTTP mode
+    process.env.CLOUD_SERVICE === 'true';
 
   debug(...args: unknown[]): void {
     if (this.shouldLog) console.debug('[DEBUG]', new Date().toISOString(), ...args);
@@ -181,11 +180,7 @@ const HOST =
 type StartArgs = Parameters<typeof server.start>[0];
 let args: StartArgs;
 
-if (
-  process.env.CLOUD_SERVICE === 'true' ||
-  process.env.SSE_LOCAL === 'true' ||
-  process.env.HTTP_STREAMABLE_SERVER === 'true'
-) {
+if (process.env.CLOUD_SERVICE === 'true') {
   args = {
     transportType: 'httpStream',
     httpStream: {
