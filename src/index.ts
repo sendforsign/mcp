@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
-import { FastMCP, type Logger } from 'fastmcp';
+import { FastMCP } from 'fastmcp';
 import { z } from 'zod';
 import { request } from 'undici';
 import type { IncomingHttpHeaders } from 'http';
@@ -44,36 +44,14 @@ function removeEmptyTopLevel<T extends Record<string, any>>(obj: T): Partial<T> 
   return out;
 }
 
-class ConsoleLogger implements Logger {
-  private shouldLog =
-    // Log more verbosely only when explicitly running HTTP mode
-    process.env.CLOUD_SERVICE === 'true';
-
-  debug(...args: unknown[]): void {
-    if (this.shouldLog) console.debug('[DEBUG]', new Date().toISOString(), ...args);
-  }
-  error(...args: unknown[]): void {
-    if (this.shouldLog) console.error('[ERROR]', new Date().toISOString(), ...args);
-  }
-  info(...args: unknown[]): void {
-    if (this.shouldLog) console.log('[INFO]', new Date().toISOString(), ...args);
-  }
-  log(...args: unknown[]): void {
-    if (this.shouldLog) console.log('[LOG]', new Date().toISOString(), ...args);
-  }
-  warn(...args: unknown[]): void {
-    if (this.shouldLog) console.warn('[WARN]', new Date().toISOString(), ...args);
-  }
-}
-
 const server = new FastMCP<SessionData>({
   name: 'mcp-sfs',
   version: '1.0.0',
-  logger: new ConsoleLogger(),
   roots: { enabled: false },
-  authenticate: async (request: { headers: IncomingHttpHeaders }): Promise<SessionData> => {
-    const apiKey = extractApiKey(request.headers) || process.env.SFS_API_KEY;
-    const headerClientKey = request.headers['x-client-key'] as string | string[] | undefined;
+  authenticate: async (request?: { headers?: IncomingHttpHeaders }): Promise<SessionData> => {
+    const headers: IncomingHttpHeaders = (request?.headers as IncomingHttpHeaders) || {} as IncomingHttpHeaders;
+    const apiKey = extractApiKey(headers) || process.env.SFS_API_KEY;
+    const headerClientKey = headers['x-client-key'] as string | string[] | undefined;
     const normalizedHeaderClientKey = headerClientKey
       ? Array.isArray(headerClientKey)
         ? headerClientKey[0]
@@ -85,7 +63,6 @@ const server = new FastMCP<SessionData>({
     // Tools themselves validate presence of credentials.
     return { apiKey, clientKey };
   },
-  health: { enabled: true, message: 'ok', path: '/health', status: 200 },
 });
 
 const ORIGIN = 'mcp-sfs';
@@ -169,26 +146,6 @@ server.addTool({
   },
 });
 
-const PORT = Number(process.env.PORT || 3000);
-const HOST =
-  process.env.CLOUD_SERVICE === 'true' ? '0.0.0.0' : process.env.HOST || 'localhost';
-
-type StartArgs = Parameters<typeof server.start>[0];
-let args: StartArgs;
-
-if (process.env.CLOUD_SERVICE === 'true') {
-  args = {
-    transportType: 'httpStream',
-    httpStream: {
-      port: PORT,
-      host: HOST,
-      stateless: true,
-    },
-  };
-} else {
-  args = { transportType: 'stdio' };
-}
-
-await server.start(args);
+await server.start({ transportType: 'stdio' });
 
 
