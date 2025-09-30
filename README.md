@@ -1,17 +1,17 @@
-## MCP SFS Server
+## SendForSign MCP Server
 
 MCP server for SendForSign API with both transports (stdio and httpStream). Provides tools to list templates and read template content.
 
 ### Install
 
 ```bash
-npm i -g @iliabovkunov/mcp-sfs
+npm i -g @sendforsign/mcp
 ```
 
 Or run via npx (no install):
 
 ```bash
-npx @iliabovkunov/mcp-sfs
+npx @sendforsign/mcp
 ```
 
 Use in an MCP client config (via npx):
@@ -19,9 +19,9 @@ Use in an MCP client config (via npx):
 ```json
 {
   "mcpServers": {
-    "mcp-sfs": {
+    "sendforsign-mcp": {
       "command": "npx",
-      "args": ["-y", "@iliabovkunov/mcp-sfs"],
+      "args": ["-y", "@sendforsign/mcp"],
       "env": {
         "SFS_API_KEY": "YOUR-API-KEY",
         "SFS_CLIENT_KEY": "YOUR-CLIENT-KEY"
