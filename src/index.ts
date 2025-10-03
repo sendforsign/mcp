@@ -147,11 +147,9 @@ server.addTool({
   description: `List all available SendForSign templates and their keys.`,
   parameters: z.object({}).strict(),
   execute: async (args, { session, log }) => {
-    const { clientKey: clientKeyArg } = args as { clientKey?: string };
-
+    // ✅ ИСПРАВЛЕНО: clientKey берется только из session или env
     const apiKey = (session?.apiKey as string | undefined) ?? process.env.SFS_API_KEY;
-    const clientKey =
-      clientKeyArg ?? (session?.clientKey as string | undefined) ?? process.env.SFS_CLIENT_KEY;
+    const clientKey = (session?.clientKey as string | undefined) ?? process.env.SFS_CLIENT_KEY;
 
     if (!apiKey || !clientKey) {
       throw new Error("Unauthorized - API key and client key are required");
@@ -174,20 +172,17 @@ server.addTool({
       .string()
       .min(1)
       .describe("The unique key identifier of the template to read")
-  }),
+  }).strict(),
   execute: async (args, { session, log }) => {
-    const { templateKey, clientKey: clientKeyArg } = args as {
-      templateKey: string;
-      clientKey?: string;
-    };
+    // ✅ ИСПРАВЛЕНО: clientKey НЕ извлекается из args
+    const { templateKey } = args;
 
     if (!templateKey || !templateKey.trim()) {
       throw new Error('Missing required argument "templateKey"');
     }
 
     const apiKey = (session?.apiKey as string | undefined) ?? process.env.SFS_API_KEY;
-    const clientKey =
-      clientKeyArg ?? (session?.clientKey as string | undefined) ?? process.env.SFS_CLIENT_KEY;
+    const clientKey = (session?.clientKey as string | undefined) ?? process.env.SFS_CLIENT_KEY;
 
     if (!apiKey || !clientKey) {
       throw new Error("Unauthorized - API key and client key are required");
