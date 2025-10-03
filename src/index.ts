@@ -145,14 +145,7 @@ function asText(data: unknown): string {
 server.addTool({
   name: "sfs_list_templates",
   description: `List all available SendForSign templates and their keys.`,
-  parameters: z
-    .object({
-      clientKey: z
-        .string()
-        .min(1)
-        .optional()
-        .describe("Optional client key to override session/env, return empty string if missing"),
-    }),
+  parameters: z.object({}).strict(),
   execute: async (args, { session, log }) => {
     const { clientKey: clientKeyArg } = args as { clientKey?: string };
 
@@ -180,12 +173,7 @@ server.addTool({
     templateKey: z
       .string()
       .min(1)
-      .describe("The unique key identifier of the template to read"),
-    clientKey: z
-      .string()
-      .min(1)
-      .optional()
-      .describe("Optional client key to override session/env, return empty string if missing"),
+      .describe("The unique key identifier of the template to read")
   }),
   execute: async (args, { session, log }) => {
     const { templateKey, clientKey: clientKeyArg } = args as {
