@@ -145,10 +145,20 @@ function asText(data: unknown): string {
 server.addTool({
   name: "sfs_list_templates",
   description: `List all available SendForSign templates and their keys.`,
-  parameters: z.object({}), // Пустые параметры
+  parameters: z
+    .object({
+      clientKey: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Optional client key to override session/env, return empty string if missing"),
+    }),
   execute: async (args, { session, log }) => {
-    const apiKey = process.env.SFS_API_KEY;
-    const clientKey = process.env.SFS_CLIENT_KEY;
+    const { clientKey: clientKeyArg } = args as { clientKey?: string };
+
+    const apiKey = (session?.apiKey as string | undefined) ?? process.env.SFS_API_KEY;
+    const clientKey =
+      clientKeyArg ?? (session?.clientKey as string | undefined) ?? process.env.SFS_CLIENT_KEY;
 
     if (!apiKey || !clientKey) {
       throw new Error("Unauthorized - API key and client key are required");
@@ -167,17 +177,29 @@ server.addTool({
   name: "sfs_read_template",
   description: "Read a SendForSign template content by templateKey.",
   parameters: z.object({
-    templateKey: z.string().min(1).describe("The unique key identifier of the template to read")
+    templateKey: z
+      .string()
+      .min(1)
+      .describe("The unique key identifier of the template to read"),
+    clientKey: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Optional client key to override session/env, return empty string if missing"),
   }),
   execute: async (args, { session, log }) => {
-    const { templateKey } = args as { templateKey: string };
+    const { templateKey, clientKey: clientKeyArg } = args as {
+      templateKey: string;
+      clientKey?: string;
+    };
 
     if (!templateKey || !templateKey.trim()) {
       throw new Error('Missing required argument "templateKey"');
     }
 
-    const apiKey = process.env.SFS_API_KEY;
-    const clientKey = process.env.SFS_CLIENT_KEY;
+    const apiKey = (session?.apiKey as string | undefined) ?? process.env.SFS_API_KEY;
+    const clientKey =
+      clientKeyArg ?? (session?.clientKey as string | undefined) ?? process.env.SFS_CLIENT_KEY;
 
     if (!apiKey || !clientKey) {
       throw new Error("Unauthorized - API key and client key are required");
