@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import dotenv from 'dotenv';
-import { FastMCP, type Logger } from 'fastmcp';
-import { z } from 'zod';
-import { request } from 'undici';
-import type { IncomingHttpHeaders } from 'http';
+import dotenv from "dotenv";
+import { FastMCP, type Logger } from "fastmcp";
+import { z } from "zod";
+import { request } from "undici";
+import type { IncomingHttpHeaders } from "http";
 
 dotenv.config({ debug: false, quiet: true });
 
@@ -14,30 +14,38 @@ interface SessionData {
 }
 
 function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
-  const headerAuth = headers['authorization'];
-  const headerApiKey = (headers['x-sendforsign-key'] || headers['x-api-key']) as
-    | string
-    | string[]
-    | undefined;
+  const headerAuth = headers["authorization"];
+  const headerApiKey = (headers["x-sendforsign-key"] ||
+    headers["x-api-key"]) as string | string[] | undefined;
 
   if (headerApiKey) {
     return Array.isArray(headerApiKey) ? headerApiKey[0] : headerApiKey;
   }
 
-  if (typeof headerAuth === 'string' && headerAuth.toLowerCase().startsWith('bearer ')) {
+  if (
+    typeof headerAuth === "string" &&
+    headerAuth.toLowerCase().startsWith("bearer ")
+  ) {
     return headerAuth.slice(7).trim();
   }
 
   return undefined;
 }
 
-function removeEmptyTopLevel<T extends Record<string, any>>(obj: T): Partial<T> {
+function removeEmptyTopLevel<T extends Record<string, any>>(
+  obj: T
+): Partial<T> {
   const out: Partial<T> = {};
   for (const [k, v] of Object.entries(obj)) {
     if (v == null) continue;
-    if (typeof v === 'string' && v.trim() === '') continue;
+    if (typeof v === "string" && v.trim() === "") continue;
     if (Array.isArray(v) && v.length === 0) continue;
-    if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) continue;
+    if (
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      Object.keys(v).length === 0
+    )
+      continue;
     // @ts-expect-error dynamic
     out[k] = v;
   }
@@ -46,37 +54,46 @@ function removeEmptyTopLevel<T extends Record<string, any>>(obj: T): Partial<T> 
 
 class ConsoleLogger implements Logger {
   private shouldLog =
-    process.env.CLOUD_SERVICE === 'true' ||
-    process.env.SSE_LOCAL === 'true' ||
-    process.env.HTTP_STREAMABLE_SERVER === 'true';
+    process.env.CLOUD_SERVICE === "true" ||
+    process.env.SSE_LOCAL === "true" ||
+    process.env.HTTP_STREAMABLE_SERVER === "true";
 
   debug(...args: unknown[]): void {
-    if (this.shouldLog) console.debug('[DEBUG]', new Date().toISOString(), ...args);
+    if (this.shouldLog)
+      console.debug("[DEBUG]", new Date().toISOString(), ...args);
   }
   error(...args: unknown[]): void {
-    if (this.shouldLog) console.error('[ERROR]', new Date().toISOString(), ...args);
+    if (this.shouldLog)
+      console.error("[ERROR]", new Date().toISOString(), ...args);
   }
   info(...args: unknown[]): void {
-    if (this.shouldLog) console.log('[INFO]', new Date().toISOString(), ...args);
+    if (this.shouldLog)
+      console.log("[INFO]", new Date().toISOString(), ...args);
   }
   log(...args: unknown[]): void {
-    if (this.shouldLog) console.log('[LOG]', new Date().toISOString(), ...args);
+    if (this.shouldLog) console.log("[LOG]", new Date().toISOString(), ...args);
   }
   warn(...args: unknown[]): void {
-    if (this.shouldLog) console.warn('[WARN]', new Date().toISOString(), ...args);
+    if (this.shouldLog)
+      console.warn("[WARN]", new Date().toISOString(), ...args);
   }
 }
 
 const server = new FastMCP<SessionData>({
-  name: 'mcp-sfs',
-  version: '1.0.0',
+  name: "mcp-sfs",
+  version: "1.0.0",
   logger: new ConsoleLogger(),
   roots: { enabled: false },
-  authenticate: async (request: { headers: IncomingHttpHeaders }): Promise<SessionData> => {
-    const isCloud = process.env.CLOUD_SERVICE === 'true';
+  authenticate: async (request: {
+    headers: IncomingHttpHeaders;
+  }): Promise<SessionData> => {
+    const isCloud = process.env.CLOUD_SERVICE === "true";
 
     const apiKeyFromHeader = extractApiKey(request.headers);
-    const headerClientKey = request.headers['x-client-key'] as string | string[] | undefined;
+    const headerClientKey = request.headers["x-client-key"] as
+      | string
+      | string[]
+      | undefined;
     const clientKeyFromHeader = headerClientKey
       ? Array.isArray(headerClientKey)
         ? headerClientKey[0]
@@ -84,41 +101,33 @@ const server = new FastMCP<SessionData>({
       : undefined;
 
     if (isCloud) {
-      if (!apiKeyFromHeader) {
-        throw new Error('SendForSign API key is required');
-      }
-      if (!clientKeyFromHeader) {
-        throw new Error('SendForSign client key is required');
+      if (!apiKeyFromHeader || !clientKeyFromHeader) {
+        return removeEmptyTopLevel({
+          apiKey: apiKeyFromHeader,
+          clientKey: clientKeyFromHeader,
+        });
       }
       return { apiKey: apiKeyFromHeader, clientKey: clientKeyFromHeader };
     }
 
-    // For self-hosted / stdio: allow env fallbacks
-    const apiKey = apiKeyFromHeader || process.env.SFS_API_KEY;
-    const clientKey = clientKeyFromHeader || process.env.SFS_CLIENT_KEY;
-
-    if (!apiKey || !clientKey) {
-      throw new Error(
-        'Unauthorized - API key and client key are required when not configured via environment'
-      );
-    }
-    return { apiKey, clientKey };
+    // For stdio mode: return empty session, keys will be read from env in tools
+    return {};
   },
-  health: { enabled: true, message: 'ok', path: '/health', status: 200 },
+  health: { enabled: true, message: "ok", path: "/health", status: 200 },
 });
 
-const ORIGIN = 'mcp-sfs';
+const ORIGIN = "mcp-sfs";
 
 async function sfsCall(
   apiKey: string,
   body: Record<string, unknown>
 ): Promise<any> {
-  const endpoint = 'https://api.sendforsign.com/api/template';
+  const endpoint = "https://api.sendforsign.com/api/template";
   const res = await request(endpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'X-Sendforsign-Key': apiKey,
-      'Content-Type': 'application/json',
+      "X-Sendforsign-Key": apiKey,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
   });
@@ -133,30 +142,25 @@ function asText(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
-// Schemas
-const listParams = z.object({
-  // Dummy parameter to avoid empty properties object
-  _unused: z.string().optional(),
-});
-
-const readParams = z.object({
-  templateKey: z.string().min(1),
-  // No clientKey parameter - comes from environment variables or session
-});
-
 server.addTool({
-  name: 'sfs_list_templates',
-  description:
-    'List SendForSign templates and their keys for the current clientKey.',
-  parameters: listParams,
+  name: "sfs_list_templates",
+  description: `List all available SendForSign templates and their keys.`,
+  parameters: z.object({
+    clientKey: z.string().optional().describe("Client key for authentication. If not provided, uses the server-configured default.")
+  }),
   execute: async (args, { session, log }) => {
-    // В stdio режиме session может быть undefined, читаем из переменных окружения
-    const apiKey = session?.apiKey as string | undefined || process.env.SFS_API_KEY;
-    const clientKey = session?.clientKey as string | undefined || process.env.SFS_CLIENT_KEY;
-    if (!apiKey || !clientKey) throw new Error('Unauthorized - API key and client key are required');
-    log.info('Listing templates', { origin: ORIGIN });
+    const { clientKey: clientKeyArg } = args as { clientKey?: string };
+    
+    const apiKey = process.env.SFS_API_KEY;
+    const clientKey = clientKeyArg || process.env.SFS_CLIENT_KEY;
+
+    if (!apiKey || !clientKey) {
+      throw new Error("Unauthorized - API key and client key are required");
+    }
+
+    log.info("Listing templates", { origin: ORIGIN, hasClientKeyArg: !!clientKeyArg });
     const body = {
-      data: removeEmptyTopLevel({ clientKey, action: 'list' as const }),
+      data: removeEmptyTopLevel({ clientKey, action: "list" as const }),
     };
     const res = await sfsCall(apiKey, body);
     return asText(res);
@@ -164,19 +168,30 @@ server.addTool({
 });
 
 server.addTool({
-  name: 'sfs_read_template',
-  description: 'Read a SendForSign template content by templateKey.',
-  parameters: readParams,
+  name: "sfs_read_template",
+  description: "Read a SendForSign template content by templateKey.",
+  parameters: z.object({
+    templateKey: z.string().min(1).describe("The unique key identifier of the template to read"),
+    clientKey: z.string().optional().describe("Client key for authentication. If not provided, uses the server-configured default.")
+  }),
   execute: async (args, { session, log }) => {
-    const { templateKey } = args as { templateKey: string };
-    // В stdio режиме session может быть undefined, читаем из переменных окружения
-    const apiKey = session?.apiKey as string | undefined || process.env.SFS_API_KEY;
-    const clientKey = session?.clientKey as string | undefined || process.env.SFS_CLIENT_KEY;
-    if (!apiKey || !clientKey) throw new Error('Unauthorized - API key and client key are required');
-    log.info('Reading template', { templateKey, origin: ORIGIN });
+    const { templateKey, clientKey: clientKeyArg } = args as { templateKey: string; clientKey?: string };
+
+    if (!templateKey || !templateKey.trim()) {
+      throw new Error('Missing required argument "templateKey"');
+    }
+
+    const apiKey = process.env.SFS_API_KEY;
+    const clientKey = clientKeyArg || process.env.SFS_CLIENT_KEY;
+
+    if (!apiKey || !clientKey) {
+      throw new Error("Unauthorized - API key and client key are required");
+    }
+
+    log.info("Reading template", { templateKey, origin: ORIGIN, hasClientKeyArg: !!clientKeyArg });
     const body = {
       data: removeEmptyTopLevel({
-        action: 'read' as const,
+        action: "read" as const,
         clientKey,
         template: { templateKey },
       }),
@@ -188,18 +203,20 @@ server.addTool({
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST =
-  process.env.CLOUD_SERVICE === 'true' ? '0.0.0.0' : process.env.HOST || 'localhost';
+  process.env.CLOUD_SERVICE === "true"
+    ? "0.0.0.0"
+    : process.env.HOST || "localhost";
 
 type StartArgs = Parameters<typeof server.start>[0];
 let args: StartArgs;
 
 if (
-  process.env.CLOUD_SERVICE === 'true' ||
-  process.env.SSE_LOCAL === 'true' ||
-  process.env.HTTP_STREAMABLE_SERVER === 'true'
+  process.env.CLOUD_SERVICE === "true" ||
+  process.env.SSE_LOCAL === "true" ||
+  process.env.HTTP_STREAMABLE_SERVER === "true"
 ) {
   args = {
-    transportType: 'httpStream',
+    transportType: "httpStream",
     httpStream: {
       port: PORT,
       host: HOST,
@@ -207,9 +224,7 @@ if (
     },
   };
 } else {
-  args = { transportType: 'stdio' };
+  args = { transportType: "stdio" };
 }
 
 await server.start(args);
-
-
