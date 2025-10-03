@@ -145,20 +145,16 @@ function asText(data: unknown): string {
 server.addTool({
   name: "sfs_list_templates",
   description: `List all available SendForSign templates and their keys.`,
-  parameters: z.object({
-    clientKey: z.string().optional().describe("Client key for authentication. If not provided, uses the server-configured default.")
-  }),
+  parameters: z.object({}), // Пустые параметры
   execute: async (args, { session, log }) => {
-    const { clientKey: clientKeyArg } = args as { clientKey?: string };
-    
     const apiKey = process.env.SFS_API_KEY;
-    const clientKey = clientKeyArg || process.env.SFS_CLIENT_KEY;
+    const clientKey = process.env.SFS_CLIENT_KEY;
 
     if (!apiKey || !clientKey) {
       throw new Error("Unauthorized - API key and client key are required");
     }
 
-    log.info("Listing templates", { origin: ORIGIN, hasClientKeyArg: !!clientKeyArg });
+    log.info("Listing templates", { origin: ORIGIN });
     const body = {
       data: removeEmptyTopLevel({ clientKey, action: "list" as const }),
     };
@@ -171,24 +167,23 @@ server.addTool({
   name: "sfs_read_template",
   description: "Read a SendForSign template content by templateKey.",
   parameters: z.object({
-    templateKey: z.string().min(1).describe("The unique key identifier of the template to read"),
-    clientKey: z.string().optional().describe("Client key for authentication. If not provided, uses the server-configured default.")
+    templateKey: z.string().min(1).describe("The unique key identifier of the template to read")
   }),
   execute: async (args, { session, log }) => {
-    const { templateKey, clientKey: clientKeyArg } = args as { templateKey: string; clientKey?: string };
+    const { templateKey } = args as { templateKey: string };
 
     if (!templateKey || !templateKey.trim()) {
       throw new Error('Missing required argument "templateKey"');
     }
 
     const apiKey = process.env.SFS_API_KEY;
-    const clientKey = clientKeyArg || process.env.SFS_CLIENT_KEY;
+    const clientKey = process.env.SFS_CLIENT_KEY;
 
     if (!apiKey || !clientKey) {
       throw new Error("Unauthorized - API key and client key are required");
     }
 
-    log.info("Reading template", { templateKey, origin: ORIGIN, hasClientKeyArg: !!clientKeyArg });
+    log.info("Reading template", { templateKey, origin: ORIGIN });
     const body = {
       data: removeEmptyTopLevel({
         action: "read" as const,
