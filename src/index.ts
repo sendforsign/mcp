@@ -8,9 +8,9 @@ import type { IncomingHttpHeaders } from "http";
 dotenv.config({ debug: false, quiet: true });
 
 interface SessionData {
-  apiKey?: string;
-  clientKey?: string;
-  [key: string]: unknown;
+  apiKey: string;
+  clientKey: string;
+  [key: string]: any;
 }
 
 function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
@@ -32,24 +32,17 @@ function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
   return undefined;
 }
 
-function removeEmptyTopLevel<T extends Record<string, any>>(
-  obj: T
-): Partial<T> {
-  const out: Partial<T> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v == null) continue;
-    if (typeof v === "string" && v.trim() === "") continue;
-    if (Array.isArray(v) && v.length === 0) continue;
-    if (
-      typeof v === "object" &&
-      !Array.isArray(v) &&
-      Object.keys(v).length === 0
-    )
-      continue;
-    // @ts-expect-error dynamic
-    out[k] = v;
-  }
-  return out;
+function extractClientKey(headers: IncomingHttpHeaders): string | undefined {
+  const headerClientKey = headers["x-client-key"] as
+    | string
+    | string[]
+    | undefined;
+
+  if (!headerClientKey) return undefined;
+
+  return Array.isArray(headerClientKey)
+    ? headerClientKey[0]
+    : headerClientKey;
 }
 
 class ConsoleLogger implements Logger {
@@ -87,31 +80,29 @@ const server = new FastMCP<SessionData>({
   authenticate: async (request: {
     headers: IncomingHttpHeaders;
   }): Promise<SessionData> => {
-    const isCloud = process.env.CLOUD_SERVICE === "true";
+    // ✅ УПРОЩЕНО: Извлекаем оба ключа один раз здесь
+    const apiKey =
+      extractApiKey(request.headers) || process.env.SFS_API_KEY || "";
+    const clientKey =
+      extractClientKey(request.headers) || process.env.SFS_CLIENT_KEY || "";
 
-    const apiKeyFromHeader = extractApiKey(request.headers);
-    const headerClientKey = request.headers["x-client-key"] as
-      | string
-      | string[]
-      | undefined;
-    const clientKeyFromHeader = headerClientKey
-      ? Array.isArray(headerClientKey)
-        ? headerClientKey[0]
-        : headerClientKey
-      : undefined;
+    // Логирование для отладки
+    console.log("[AUTH]", new Date().toISOString(), {
+      hasApiKey: !!apiKey,
+      hasClientKey: !!clientKey,
+      apiKeySource: extractApiKey(request.headers)
+        ? "header"
+        : process.env.SFS_API_KEY
+        ? "env"
+        : "none",
+      clientKeySource: extractClientKey(request.headers)
+        ? "header"
+        : process.env.SFS_CLIENT_KEY
+        ? "env"
+        : "none",
+    });
 
-    if (isCloud) {
-      if (!apiKeyFromHeader || !clientKeyFromHeader) {
-        return removeEmptyTopLevel({
-          apiKey: apiKeyFromHeader,
-          clientKey: clientKeyFromHeader,
-        });
-      }
-      return { apiKey: apiKeyFromHeader, clientKey: clientKeyFromHeader };
-    }
-
-    // For stdio mode: return empty session, keys will be read from env in tools
-    return {};
+    return { apiKey, clientKey };
   },
   health: { enabled: true, message: "ok", path: "/health", status: 200 },
 });
@@ -147,18 +138,19 @@ server.addTool({
   description: `List all available SendForSign templates and their keys.`,
   parameters: z.object({}).strict(),
   execute: async (args, { session, log }) => {
-    // ✅ ИСПРАВЛЕНО: clientKey берется только из session или env
-    const apiKey = (session?.apiKey as string | undefined) ?? process.env.SFS_API_KEY;
-    const clientKey = (session?.clientKey as string | undefined) ?? process.env.SFS_CLIENT_KEY;
+    // ✅ УПРОЩЕНО: Ключи уже извлечены в authenticate
+    const { apiKey, clientKey } = session!;
 
     if (!apiKey || !clientKey) {
       throw new Error("Unauthorized - API key and client key are required");
     }
 
     log.info("Listing templates", { origin: ORIGIN });
+    
     const body = {
-      data: removeEmptyTopLevel({ clientKey, action: "list" as const }),
+      data: { clientKey, action: "list" as const },
     };
+    
     const res = await sfsCall(apiKey, body);
     return asText(res);
   },
@@ -167,35 +159,37 @@ server.addTool({
 server.addTool({
   name: "sfs_read_template",
   description: "Read a SendForSign template content by templateKey.",
-  parameters: z.object({
-    templateKey: z
-      .string()
-      .min(1)
-      .describe("The unique key identifier of the template to read")
-  }).strict(),
+  parameters: z
+    .object({
+      templateKey: z
+        .string()
+        .min(1)
+        .describe("The unique key identifier of the template to read"),
+    })
+    .strict(),
   execute: async (args, { session, log }) => {
-    // ✅ ИСПРАВЛЕНО: clientKey НЕ извлекается из args
     const { templateKey } = args;
+    // ✅ УПРОЩЕНО: Ключи уже извлечены в authenticate
+    const { apiKey, clientKey } = session!;
 
     if (!templateKey || !templateKey.trim()) {
       throw new Error('Missing required argument "templateKey"');
     }
-
-    const apiKey = (session?.apiKey as string | undefined) ?? process.env.SFS_API_KEY;
-    const clientKey = (session?.clientKey as string | undefined) ?? process.env.SFS_CLIENT_KEY;
 
     if (!apiKey || !clientKey) {
       throw new Error("Unauthorized - API key and client key are required");
     }
 
     log.info("Reading template", { templateKey, origin: ORIGIN });
+    
     const body = {
-      data: removeEmptyTopLevel({
+      data: {
         action: "read" as const,
         clientKey,
         template: { templateKey },
-      }),
+      },
     };
+    
     const res = await sfsCall(apiKey, body);
     return asText(res);
   },
