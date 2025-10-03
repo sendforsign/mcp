@@ -13,32 +13,36 @@ interface SessionData {
   [key: string]: any;
 }
 
-// Универсальная функция: ищет и в headers, и в process.env
-function getHeaderOrEnv(
-  headers: IncomingHttpHeaders,
-  names: string[]
-): string | undefined {
-  // ищем в headers
-  for (const name of names) {
-    const val = headers[name.toLowerCase()] as string | string[] | undefined;
-    if (val) return Array.isArray(val) ? val[0] : val;
+function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
+  const headerAuth = headers["authorization"];
+  const headerApiKey = (headers["x-sendforsign-key"] ||
+    headers["x-api-key"]) as string | string[] | undefined;
+
+  if (headerApiKey) {
+    return Array.isArray(headerApiKey) ? headerApiKey[0] : headerApiKey;
   }
 
-  // ищем в process.env (и с нижним подчёркиванием, и с дефисом, и в разных регистрах)
-  for (const name of names) {
-    const candidates = [
-      name,
-      name.replace(/-/g, "_"),
-      name.replace(/_/g, "-"),
-      name.toUpperCase(),
-      name.toLowerCase(),
-    ];
-    for (const cand of candidates) {
-      if (process.env[cand]) return process.env[cand];
-    }
+  if (
+    typeof headerAuth === "string" &&
+    headerAuth.toLowerCase().startsWith("bearer ")
+  ) {
+    return headerAuth.slice(7).trim();
   }
 
   return undefined;
+}
+
+function extractClientKey(headers: IncomingHttpHeaders): string | undefined {
+  const headerClientKey = headers["x-client-key"] as
+    | string
+    | string[]
+    | undefined;
+
+  if (!headerClientKey) return undefined;
+
+  return Array.isArray(headerClientKey)
+    ? headerClientKey[0]
+    : headerClientKey;
 }
 
 class ConsoleLogger implements Logger {
@@ -76,18 +80,26 @@ const server = new FastMCP<SessionData>({
   authenticate: async (request: {
     headers: IncomingHttpHeaders;
   }): Promise<SessionData> => {
-    // Логируем все заголовки, которые реально пришли
-    console.log("[HEADERS]", new Date().toISOString(), request.headers);
-
+    // ✅ УПРОЩЕНО: Извлекаем оба ключа один раз здесь
     const apiKey =
-      getHeaderOrEnv(request.headers, ["x-api-key", "x-sendforsign-key"]) || "";
-    const clientKey = getHeaderOrEnv(request.headers, ["x-client-key"]) || "";
+      extractApiKey(request.headers) || process.env.SFS_API_KEY || "";
+    const clientKey =
+      extractClientKey(request.headers) || process.env.SFS_CLIENT_KEY || "";
 
+    // Логирование для отладки
     console.log("[AUTH]", new Date().toISOString(), {
       hasApiKey: !!apiKey,
       hasClientKey: !!clientKey,
-      apiKeySource: apiKey ? "header/env" : "none",
-      clientKeySource: clientKey ? "header/env" : "none",
+      apiKeySource: extractApiKey(request.headers)
+        ? "header"
+        : process.env.SFS_API_KEY
+        ? "env"
+        : "none",
+      clientKeySource: extractClientKey(request.headers)
+        ? "header"
+        : process.env.SFS_CLIENT_KEY
+        ? "env"
+        : "none",
     });
 
     return { apiKey, clientKey };
@@ -125,7 +137,8 @@ server.addTool({
   name: "sfs_list_templates",
   description: `List all available SendForSign templates and their keys.`,
   parameters: z.object({}).strict(),
-  execute: async (_args, { session, log }) => {
+  execute: async (args, { session, log }) => {
+    // ✅ УПРОЩЕНО: Ключи уже извлечены в authenticate
     const { apiKey, clientKey } = session!;
 
     if (!apiKey || !clientKey) {
@@ -133,11 +146,11 @@ server.addTool({
     }
 
     log.info("Listing templates", { origin: ORIGIN });
-
+    
     const body = {
       data: { clientKey, action: "list" as const },
     };
-
+    
     const res = await sfsCall(apiKey, body);
     return asText(res);
   },
@@ -156,6 +169,7 @@ server.addTool({
     .strict(),
   execute: async (args, { session, log }) => {
     const { templateKey } = args;
+    // ✅ УПРОЩЕНО: Ключи уже извлечены в authenticate
     const { apiKey, clientKey } = session!;
 
     if (!templateKey || !templateKey.trim()) {
@@ -167,7 +181,7 @@ server.addTool({
     }
 
     log.info("Reading template", { templateKey, origin: ORIGIN });
-
+    
     const body = {
       data: {
         action: "read" as const,
@@ -175,7 +189,7 @@ server.addTool({
         template: { templateKey },
       },
     };
-
+    
     const res = await sfsCall(apiKey, body);
     return asText(res);
   },
