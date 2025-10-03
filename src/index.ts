@@ -15,8 +15,8 @@ interface SessionData {
 
 function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
   const headerAuth = headers["authorization"];
-  const headerApiKey = (headers["x_sendforsign_key"] ||
-    headers["x_api_key"]) as string | string[] | undefined;
+  const headerApiKey = (headers["x-sendforsign-key"] ||
+    headers["x-api-key"]) as string | string[] | undefined;
 
   if (headerApiKey) {
     return Array.isArray(headerApiKey) ? headerApiKey[0] : headerApiKey;
@@ -33,7 +33,7 @@ function extractApiKey(headers: IncomingHttpHeaders): string | undefined {
 }
 
 function extractClientKey(headers: IncomingHttpHeaders): string | undefined {
-  const headerClientKey = headers["x_client_key"] as
+  const headerClientKey = headers["x-client-key"] as
     | string
     | string[]
     | undefined;
