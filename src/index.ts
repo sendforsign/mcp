@@ -73,20 +73,34 @@ const server = new FastMCP<SessionData>({
   logger: new ConsoleLogger(),
   roots: { enabled: false },
   authenticate: async (request: { headers: IncomingHttpHeaders }): Promise<SessionData> => {
-    const apiKey = extractApiKey(request.headers) || process.env.SFS_API_KEY;
+    const isCloud = process.env.CLOUD_SERVICE === 'true';
+
+    const apiKeyFromHeader = extractApiKey(request.headers);
     const headerClientKey = request.headers['x-client-key'] as string | string[] | undefined;
-    const normalizedHeaderClientKey = headerClientKey
+    const clientKeyFromHeader = headerClientKey
       ? Array.isArray(headerClientKey)
         ? headerClientKey[0]
         : headerClientKey
       : undefined;
-    const clientKey = normalizedHeaderClientKey ?? process.env.SFS_CLIENT_KEY;
 
-    if (!apiKey) {
-      throw new Error('SendForSign API key is required');
+    if (isCloud) {
+      if (!apiKeyFromHeader) {
+        throw new Error('SendForSign API key is required');
+      }
+      if (!clientKeyFromHeader) {
+        throw new Error('SendForSign client key is required');
+      }
+      return { apiKey: apiKeyFromHeader, clientKey: clientKeyFromHeader };
     }
-    if (!clientKey) {
-      throw new Error('SendForSign client key is required');
+
+    // For self-hosted / stdio: allow env fallbacks
+    const apiKey = apiKeyFromHeader || process.env.SFS_API_KEY;
+    const clientKey = clientKeyFromHeader || process.env.SFS_CLIENT_KEY;
+
+    if (!apiKey || !clientKey) {
+      throw new Error(
+        'Unauthorized - API key and client key are required when not configured via environment'
+      );
     }
     return { apiKey, clientKey };
   },
@@ -121,13 +135,13 @@ function asText(data: unknown): string {
 
 // Schemas
 const listParams = z.object({
-  // optional override for clientKey (usually from session)
-  clientKey: z.string().optional(),
+  // Dummy parameter to avoid empty properties object
+  _unused: z.string().optional(),
 });
 
 const readParams = z.object({
   templateKey: z.string().min(1),
-  clientKey: z.string().optional(),
+  // No clientKey parameter - comes from environment variables or session
 });
 
 server.addTool({
@@ -136,10 +150,10 @@ server.addTool({
     'List SendForSign templates and their keys for the current clientKey.',
   parameters: listParams,
   execute: async (args, { session, log }) => {
-    const { clientKey: override } = args as { clientKey?: string };
-    const apiKey = session?.apiKey as string | undefined;
-    const clientKey = override || (session?.clientKey as string | undefined);
-    if (!apiKey || !clientKey) throw new Error('Unauthorized');
+    // В stdio режиме session может быть undefined, читаем из переменных окружения
+    const apiKey = session?.apiKey as string | undefined || process.env.SFS_API_KEY;
+    const clientKey = session?.clientKey as string | undefined || process.env.SFS_CLIENT_KEY;
+    if (!apiKey || !clientKey) throw new Error('Unauthorized - API key and client key are required');
     log.info('Listing templates', { origin: ORIGIN });
     const body = {
       data: removeEmptyTopLevel({ clientKey, action: 'list' as const }),
@@ -154,13 +168,11 @@ server.addTool({
   description: 'Read a SendForSign template content by templateKey.',
   parameters: readParams,
   execute: async (args, { session, log }) => {
-    const { templateKey, clientKey: override } = args as {
-      templateKey: string;
-      clientKey?: string;
-    };
-    const apiKey = session?.apiKey as string | undefined;
-    const clientKey = override || (session?.clientKey as string | undefined);
-    if (!apiKey || !clientKey) throw new Error('Unauthorized');
+    const { templateKey } = args as { templateKey: string };
+    // В stdio режиме session может быть undefined, читаем из переменных окружения
+    const apiKey = session?.apiKey as string | undefined || process.env.SFS_API_KEY;
+    const clientKey = session?.clientKey as string | undefined || process.env.SFS_CLIENT_KEY;
+    if (!apiKey || !clientKey) throw new Error('Unauthorized - API key and client key are required');
     log.info('Reading template', { templateKey, origin: ORIGIN });
     const body = {
       data: removeEmptyTopLevel({
