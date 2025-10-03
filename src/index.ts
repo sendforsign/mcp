@@ -78,24 +78,28 @@ const server = new FastMCP<SessionData>({
   logger: new ConsoleLogger(),
   roots: { enabled: false },
   authenticate: async (request: {
-    headers: IncomingHttpHeaders;
+    headers?: IncomingHttpHeaders;
   }): Promise<SessionData> => {
     // ✅ УПРОЩЕНО: Извлекаем оба ключа один раз здесь
-    const apiKey =
-      extractApiKey(request.headers) || process.env.SFS_API_KEY || "";
-    const clientKey =
-      extractClientKey(request.headers) || process.env.SFS_CLIENT_KEY || "";
+    // Для stdio transport headers может быть undefined
+    const apiKey = request.headers 
+      ? extractApiKey(request.headers) || process.env.SFS_API_KEY || ""
+      : process.env.SFS_API_KEY || "";
+    const clientKey = request.headers
+      ? extractClientKey(request.headers) || process.env.SFS_CLIENT_KEY || ""
+      : process.env.SFS_CLIENT_KEY || "";
 
     // Логирование для отладки
     console.log("[AUTH]", new Date().toISOString(), {
       hasApiKey: !!apiKey,
       hasClientKey: !!clientKey,
-      apiKeySource: extractApiKey(request.headers)
+      transportType: request.headers ? "httpStream" : "stdio",
+      apiKeySource: request.headers && extractApiKey(request.headers)
         ? "header"
         : process.env.SFS_API_KEY
         ? "env"
         : "none",
-      clientKeySource: extractClientKey(request.headers)
+      clientKeySource: request.headers && extractClientKey(request.headers)
         ? "header"
         : process.env.SFS_CLIENT_KEY
         ? "env"
@@ -139,10 +143,20 @@ server.addTool({
   parameters: z.object({}).strict(),
   execute: async (args, { session, log }) => {
     // ✅ УПРОЩЕНО: Ключи уже извлечены в authenticate
-    const { apiKey, clientKey } = session!;
+    let apiKey: string;
+    let clientKey: string;
+    
+    if (session) {
+      // Если сессия доступна (httpStream), используем её
+      ({ apiKey, clientKey } = session);
+    } else {
+      // Если сессия недоступна (stdio), используем переменные окружения
+      apiKey = process.env.SFS_API_KEY || "";
+      clientKey = process.env.SFS_CLIENT_KEY || "";
+    }
 
     if (!apiKey || !clientKey) {
-      throw new Error("Unauthorized - API key and client key are required");
+      throw new Error("Unauthorized - API key and client key are required. Please set SFS_API_KEY and SFS_CLIENT_KEY environment variables.");
     }
 
     log.info("Listing templates", { origin: ORIGIN });
@@ -170,14 +184,24 @@ server.addTool({
   execute: async (args, { session, log }) => {
     const { templateKey } = args;
     // ✅ УПРОЩЕНО: Ключи уже извлечены в authenticate
-    const { apiKey, clientKey } = session!;
+    let apiKey: string;
+    let clientKey: string;
+    
+    if (session) {
+      // Если сессия доступна (httpStream), используем её
+      ({ apiKey, clientKey } = session);
+    } else {
+      // Если сессия недоступна (stdio), используем переменные окружения
+      apiKey = process.env.SFS_API_KEY || "";
+      clientKey = process.env.SFS_CLIENT_KEY || "";
+    }
 
     if (!templateKey || !templateKey.trim()) {
       throw new Error('Missing required argument "templateKey"');
     }
 
     if (!apiKey || !clientKey) {
-      throw new Error("Unauthorized - API key and client key are required");
+      throw new Error("Unauthorized - API key and client key are required. Please set SFS_API_KEY and SFS_CLIENT_KEY environment variables.");
     }
 
     log.info("Reading template", { templateKey, origin: ORIGIN });
