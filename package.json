@@ -1,6 +1,6 @@
 {
   "name": "@sendforsign/mcp",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "MCP server for SendForSign (templates list/read) with stdio and httpStream transports",
   "type": "module",
   "bin": {

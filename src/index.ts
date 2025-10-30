@@ -113,11 +113,12 @@ const server = new FastMCP<SessionData>({
 
 const ORIGIN = "mcp-sfs";
 
-async function sfsCall(
+async function sfsApiCall(
   apiKey: string,
+  path: "template" | "placeholder" | "contract",
   body: Record<string, unknown>
 ): Promise<any> {
-  const endpoint = "https://api.sendforsign.com/api/template";
+  const endpoint = `https://api.sendforsign.com/api/${path}`;
   const res = await request(endpoint, {
     method: "POST",
     headers: {
@@ -165,14 +166,14 @@ server.addTool({
       data: { clientKey, action: "list" as const },
     };
     
-    const res = await sfsCall(apiKey, body);
+    const res = await sfsApiCall(apiKey, "template", body);
     return asText(res);
   },
 });
 
 server.addTool({
   name: "sfs_read_template",
-  description: "Read a SendForSign template content by templateKey.",
+  description: "Read a SendForSign template content by templateKey. Use the sfs_list_templates tool to get the templateKey if needed.",
   parameters: z
     .object({
       templateKey: z
@@ -214,7 +215,117 @@ server.addTool({
       },
     };
     
-    const res = await sfsCall(apiKey, body);
+    const res = await sfsApiCall(apiKey, "template", body);
+    return asText(res);
+  },
+});
+
+server.addTool({
+  name: "sfs_list_placeholders",
+  description:
+    "List placeholders for a specific SendForSign template by templateKey.",
+  parameters: z
+    .object({
+      templateKey: z
+        .string()
+        .min(1)
+        .describe(
+          "The unique key identifier of the template whose placeholders to list"
+        ),
+    })
+    .strict(),
+  execute: async (args, { session, log }) => {
+    const { templateKey } = args;
+    let apiKey: string;
+    let clientKey: string;
+
+    if (session) {
+      ({ apiKey, clientKey } = session);
+    } else {
+      apiKey = process.env.SFS_API_KEY || "";
+      clientKey = process.env.SFS_CLIENT_KEY || "";
+    }
+
+    if (!templateKey || !templateKey.trim()) {
+      throw new Error('Missing required argument "templateKey"');
+    }
+
+    if (!apiKey || !clientKey) {
+      throw new Error(
+        "Unauthorized - API key and client key are required. Please set SFS_API_KEY and SFS_CLIENT_KEY environment variables."
+      );
+    }
+
+    log.info("Listing placeholders", { templateKey, origin: ORIGIN });
+
+    const body = {
+      data: {
+        action: "list" as const,
+        clientKey,
+        templateKey,
+      },
+    };
+
+    const res = await sfsApiCall(apiKey, "placeholder", body);
+    return asText(res);
+  },
+});
+
+server.addTool({
+  name: "sfs_create_contract",
+  description:
+    "Create a new SendForSign contract from HTML/text value with a given name.",
+  parameters: z
+    .object({
+      name: z
+        .string()
+        .min(1)
+        .describe("Human-readable contract name, automatically generated if not provided"),
+      value: z
+        .string()
+        .min(1)
+        .describe("HTML content of the contract (e.g., <p>...</p>), automatically generated if not provided"),
+    })
+    .strict(),
+  execute: async (args, { session, log }) => {
+    const { name, value } = args;
+    let apiKey: string;
+    let clientKey: string;
+
+    if (session) {
+      ({ apiKey, clientKey } = session);
+    } else {
+      apiKey = process.env.SFS_API_KEY || "";
+      clientKey = process.env.SFS_CLIENT_KEY || "";
+    }
+
+    if (!name || !name.trim()) {
+      throw new Error('Missing required argument "name"');
+    }
+    if (!value || !value.trim()) {
+      throw new Error('Missing required argument "value"');
+    }
+
+    if (!apiKey || !clientKey) {
+      throw new Error(
+        "Unauthorized - API key and client key are required. Please set SFS_API_KEY and SFS_CLIENT_KEY environment variables."
+      );
+    }
+
+    log.info("Creating contract", { name, origin: ORIGIN });
+
+    const body = {
+      data: {
+        action: "create" as const,
+        clientKey,
+        contract: {
+          name,
+          value,
+        },
+      },
+    };
+
+    const res = await sfsApiCall(apiKey, "contract", body);
     return asText(res);
   },
 });
